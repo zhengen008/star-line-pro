@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 216 20% 96%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 9 75% 62%;
+    --primary-foreground: 0 0% 100%;
+    --brand: #e76b55;
+    --brand-hover: #d15642;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 20%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 215 15% 45%;
+    --accent: 9 75% 62%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 15% 90%;
+    --input: 210 15% 90%;
+    --ring: 9 75% 62%;
+    --radius: 1.5rem;
+    --font-inter: 'Inter', sans-serif;
+
+    /* Custom brand (#e76b55) */
+    --sidebar-bg: 0 0% 100%;
+    --accent-lime: #e76b55;
+    --accent-lime-hover: #d15642;
+  }
+}
+
+@layer base {
+  /* 表单输入框默认背景（搜索框等显式 bg-white 的不受影响） */
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']),
+  textarea,
+  select {
+    @apply bg-secondary;
+  }
+}
+
+@layer utilities {
+  /* 主题色背景按钮统一白字 */
+  .bg-primary,
+  .bg-lime-400 {
+    @apply text-white;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+  }
+}
+
+/* Workflow canvas drag styles */
+.workflow-node {
+  cursor: grab;
+  user-select: none;
+}
+.workflow-node:active {
+  cursor: grabbing;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+
+/* Global select styling */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px !important;
+}
+
+select option {
+  background-color: white;
+  color: hsl(var(--foreground));
+  padding: 8px;
+}
+
+select option:checked, select option:hover {
+  background-color: hsl(var(--primary)) !important;
+  color: white !important;
+}

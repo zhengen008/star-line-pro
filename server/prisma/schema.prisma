@@ -1,0 +1,444 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Starline B2B OA 数据库模型（与 server/prisma/schema.prisma 保持一致）
+// ============================================================
+
+// ============================================================
+// 1. 员工表 (Employee)
+// ============================================================
+model Employee {
+  id              String    @id @default(cuid())
+  employee_id     String    @unique
+  name            String
+  department      String
+  position        String?
+  employment_type String?   @default("全职")
+  base_salary     Decimal?  @db.Decimal(12, 2)
+  status          String?   @default("在职")
+  role            String?   @default("普通员工")
+  email           String?
+  join_date       String?
+  created_by      String?
+  created_by_id   String?
+  created_date    DateTime  @default(now())
+  updated_date    DateTime  @updatedAt
+
+  @@index([employee_id])
+  @@index([name])
+  @@index([department])
+  @@map("employees")
+}
+
+// ============================================================
+// 2. 部门表 (Department)
+// ============================================================
+model Department {
+  id              String    @id @default(cuid())
+  name            String
+  code            String?
+  head            String?
+  head_open_id    String?
+  feishu_dept_id  String?   @unique
+  parent_dept_id  String?
+  member_count    Int       @default(0)
+  status          String    @default("启用")
+  created_by      String?
+  created_by_id   String?
+  created_date    DateTime  @default(now())
+  updated_date    DateTime  @updatedAt
+
+  @@index([feishu_dept_id])
+  @@index([parent_dept_id])
+  @@map("departments")
+}
+
+// ============================================================
+// 3. 角色权限表 (Role)
+// ============================================================
+model Role {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  description     String?
+  color           String    @default("blue")
+  permissions     String?   @db.Text
+  is_system       Boolean   @default(false)
+  sort_order      Int       @default(0)
+  created_by      String?
+  created_by_id   String?
+  created_date    DateTime  @default(now())
+  updated_date    DateTime  @updatedAt
+
+  @@index([sort_order])
+  @@map("roles")
+}
+
+// ============================================================
+// 4. 商机/投标表 (Bid)
+// ============================================================
+model Bid {
+  id                String    @id @default(cuid())
+  project_name      String
+  customer_name     String?
+  bid_form          String?
+  bid_stage         String?
+  project_type      String?
+  signup_date       String?
+  open_date         String?
+  open_form         String?
+  open_location     String?
+  bid_amount        Decimal?  @db.Decimal(12, 2)
+  deposit_amount    Decimal?  @db.Decimal(12, 2)
+  manager           String?
+  result            String    @default("弃标")
+  payment_method    String?
+  contract_files    String?   @db.Text
+  proposal_files    String?   @db.Text
+  quotation_files   String?   @db.Text
+  created_by        String?
+  created_by_id     String?
+  created_date      DateTime  @default(now())
+  updated_date      DateTime  @updatedAt
+
+  projects          Project[] @relation("BidToProject")
+
+  @@index([customer_name])
+  @@index([manager])
+  @@map("bids")
+}
+
+// ============================================================
+// 5. 项目表 (Project)
+// ============================================================
+model Project {
+  id                String    @id @default(cuid())
+  project_id        String?   @unique
+  bid_id            String?
+  name              String
+  contract_no       String?
+  project_type      String?
+  customer          String
+  start_date        String?
+  end_date          String?
+  contract_amount   Decimal?  @db.Decimal(12, 2)
+  budget_cost       Decimal?  @db.Decimal(12, 2)
+  remaining_budget  Decimal?  @db.Decimal(12, 2)
+  manager           String?
+  members           String[]
+  payment_method    String?
+  status            String    @default("立项审批中")
+  is_deleted        Boolean   @default(false)
+  deleted_at        String?
+  deleted_by        String?
+  created_by        String?
+  created_by_id     String?
+  created_date      DateTime  @default(now())
+  updated_date      DateTime  @updatedAt
+
+  bid               Bid?      @relation("BidToProject", fields: [bid_id], references: [id])
+  logs              ProjectLog[]
+  approvals         ProjectApproval[]
+  execution_items   ExecutionItem[]
+  execution_sheets  ExecutionSheet[]
+
+  @@index([project_id])
+  @@index([customer])
+  @@index([manager])
+  @@index([status])
+  @@map("projects")
+}
+
+// ============================================================
+// 6. 项目日志表 (ProjectLog)
+// ============================================================
+model ProjectLog {
+  id            String    @id @default(cuid())
+  project_id    String
+  action        String
+  detail        String?
+  operator      String?
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime  @default(now())
+  updated_date  DateTime?
+
+  project       Project   @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([created_date])
+  @@map("project_logs")
+}
+
+// ============================================================
+// 7. 审批表 (Approval)
+// ============================================================
+model Approval {
+  id                  String    @id @default(cuid())
+  title               String
+  type                String
+  type_label          String?
+  sub_type            String?
+  applicant           String?
+  dept                String?
+  fields              String?   @db.Text
+  amount              Decimal?  @db.Decimal(12, 2)
+  direction           String?
+  project_id          String?
+  project_name        String?
+  status              String    @default("待审核")
+  cc_list             String[]
+  steps               String?   @db.Text
+  workflow_id         String?
+  related_project_id  String?
+  created_by          String?
+  created_by_id       String?
+  created_date        DateTime  @default(now())
+  updated_date        DateTime  @updatedAt
+
+  @@index([type])
+  @@index([applicant])
+  @@index([status])
+  @@index([project_id])
+  @@map("approvals")
+}
+
+// ============================================================
+// 8. 项目审批表 (ProjectApproval)
+// ============================================================
+model ProjectApproval {
+  id            String    @id @default(cuid())
+  project_id    String?
+  project_name  String?
+  type          String
+  type_label    String?
+  title         String
+  fields        String?   @db.Text
+  direction     String?
+  amount        Decimal?  @db.Decimal(12, 2)
+  applicant     String?
+  status        String    @default("待审核")
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime  @default(now())
+  updated_date  DateTime  @updatedAt
+
+  project       Project?  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([status])
+  @@map("project_approvals")
+}
+
+// ============================================================
+// 9. 工作流模板表 (WorkflowTemplate)
+// ============================================================
+model WorkflowTemplate {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  approval_type String?
+  nodes         String?   @db.Text
+  connections   String?   @db.Text
+  status        String?   @default("草稿")
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime  @default(now())
+  updated_date  DateTime  @updatedAt
+
+  @@index([status])
+  @@map("workflow_templates")
+}
+
+// ============================================================
+// 10. 公告表 (Notice)
+// ============================================================
+model Notice {
+  id            String    @id @default(cuid())
+  title         String
+  content       String    @db.Text
+  category      String    @default("公告")
+  is_pinned     Boolean   @default(false)
+  expires_at    String?
+  published_by  String?
+  status        String    @default("已发布")
+  read_by       String[]
+  feishu_sent   Boolean   @default(false)
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime  @default(now())
+  updated_date  DateTime  @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([is_pinned])
+  @@map("notices")
+}
+
+// ============================================================
+// 11. 通知表 (Notification)
+// ============================================================
+model Notification {
+  id                String    @id @default(cuid())
+  recipient         String
+  recipient_open_id String?
+  type              String
+  title             String
+  content           String?   @db.Text
+  link              String?
+  related_id        String?
+  is_read           Boolean   @default(false)
+  is_archived       Boolean   @default(false)
+  feishu_sent       Boolean   @default(false)
+  priority          String    @default("normal")
+  created_by        String?
+  created_by_id     String?
+  created_date      DateTime  @default(now())
+  updated_date      DateTime  @updatedAt
+
+  @@index([recipient])
+  @@index([type])
+  @@index([is_read])
+  @@map("notifications")
+}
+
+// ============================================================
+// 12. 横幅/轮播图表 (Banner)
+// ============================================================
+model Banner {
+  id          String    @id @default(cuid())
+  image_url   String?
+  title       String?
+  link        String?
+  order       Int       @default(0)
+  created_by  String?
+  created_by_id String?
+  created_date DateTime @default(now())
+  updated_date DateTime @updatedAt
+
+  @@index([order])
+  @@map("banners")
+}
+
+// ============================================================
+// 13. 打卡记录表 (CheckIn)
+// ============================================================
+model CheckIn {
+  id            String    @id @default(cuid())
+  user_id       String?
+  date          String?
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime  @default(now())
+  updated_date  DateTime?
+
+  @@index([user_id])
+  @@index([date])
+  @@map("check_ins")
+}
+
+// ============================================================
+// 14. 备忘录表 (Memo) - 工作台便签
+// ============================================================
+model Memo {
+  id            String    @id @default(cuid())
+  owner         String?
+  content       String?   @db.Text // 富文本 HTML，图片为 OSS URL 或 base64
+  color         String?   @default("yellow")
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime  @default(now())
+  updated_date  DateTime  @updatedAt
+
+  @@index([owner])
+  @@map("memos")
+}
+
+// ============================================================
+// 15. 执行内容 Sheet（项目内按批次提交审批）
+// ============================================================
+model ExecutionSheet {
+  id            String   @id @default(cuid())
+  project_id    String
+  name          String
+  approval_id   String?
+  status        String   @default("待审核")
+  created_by    String?
+  created_by_id String?
+  created_date  DateTime @default(now())
+  updated_date  DateTime @updatedAt
+
+  project Project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  items   ExecutionItem[]
+
+  @@index([project_id])
+  @@index([status])
+  @@map("execution_sheets")
+}
+
+// ============================================================
+// 16. 执行内容表 (ExecutionItem)
+// project_id 为空 = 服务管理目录；有 project_id = 项目内条目
+// ============================================================
+model ExecutionItem {
+  id               String   @id @default(cuid())
+  project_id       String?
+  sheet_id         String?
+  source_item_id   String?
+  seq_id           String?
+  project_name     String?
+  content          String
+  detail           String?  @db.Text
+  unit             String?
+  quantity         Decimal? @db.Decimal(14, 2)
+  init_price       Decimal? @db.Decimal(14, 2)
+  init_total       Decimal? @db.Decimal(14, 2)
+  budget_price     Decimal? @db.Decimal(14, 2)
+  budget_total     Decimal? @db.Decimal(14, 2)
+  is_service_addon Boolean  @default(false)
+  created_by       String?
+  created_by_id    String?
+  created_date     DateTime @default(now())
+  updated_date     DateTime @updatedAt
+
+  project        Project?        @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  sheet          ExecutionSheet? @relation(fields: [sheet_id], references: [id], onDelete: Cascade)
+  supplier_items SupplierItem[]
+
+  @@index([project_id])
+  @@index([sheet_id])
+  @@index([source_item_id])
+  @@map("execution_items")
+}
+
+// ============================================================
+// 17. 供应商明细表 (SupplierItem)
+// 一条执行内容对应多条供应商明细
+// ============================================================
+model SupplierItem {
+  id                String   @id @default(cuid())
+  execution_item_id String
+  supplier_name     String   // 供应商名称
+  cost_detail       String?  @db.Text // 成本明细（金额）
+  remark            String?  @db.Text // 备注
+  contract_file     String?  // 合同归档（OSS 文件 JSON）
+  invoice_file      String?  // 发票归档（OSS 文件 JSON）
+  approval_id       String?  // 关联付款审批
+  payment_status    String?  @default("无付款") // 无付款|待审核|审核中|已通过|已拒绝
+  created_by        String?
+  created_by_id     String?
+  created_date      DateTime @default(now())
+  updated_date      DateTime @updatedAt
+
+  execution_item ExecutionItem @relation(fields: [execution_item_id], references: [id], onDelete: Cascade)
+
+  @@index([execution_item_id])
+  @@index([approval_id])
+  @@map("supplier_items")
+}
