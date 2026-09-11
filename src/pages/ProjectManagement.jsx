@@ -25,11 +25,22 @@ const STATUS_MAP = {
 
 /**
  * InitiateModal - 手动立项表单（仅管理员）
- * 从「中标且未关联项目」的竞标中选择，直接创建「执行中」项目（免审批）
+ * ① 关联中标竞标 或 ② 直签项目；提交后直接「执行中」（免审批）
  */
 function InitiateModal({ onClose, onSave }) {
+  const [linkMode, setLinkMode] = useState('bid'); // bid | direct
   const [bidId, setBidId] = useState('');
-  const [form, setForm] = useState({ contractNo: '', budgetCost: '', members: [], startDate: '', endDate: '', projectManager: '' });
+  const [form, setForm] = useState({
+    title: '',
+    amount: '',
+    customer: '',
+    contractNo: '',
+    budgetCost: '',
+    members: [],
+    startDate: '',
+    endDate: '',
+    projectManager: '',
+  });
   const { data: bidOptions = [] } = useQuery({
     queryKey: ['bids'],
     queryFn: () => api.entities.Bid.list('-created_date'),
@@ -38,22 +49,52 @@ function InitiateModal({ onClose, onSave }) {
     queryKey: ['projects-for-bid-check'],
     queryFn: () => api.entities.Project.list('-created_date'),
   });
-  const linkedBidIds = new Set(existingProjects.map(p => p.bid_id).filter(Boolean));
-  const availableBids = bidOptions.filter(b => b.result === '中标' && !linkedBidIds.has(b.id));
-  const bid = bidOptions.find(b => b.id === bidId);
-  const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const linkedBidIds = new Set(existingProjects.map((p) => p.bid_id).filter(Boolean));
+  const availableBids = bidOptions.filter((b) => b.result === '中标' && !linkedBidIds.has(b.id));
+  const bid = bidOptions.find((b) => b.id === bidId);
+  const f = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const switchMode = (mode) => {
+    setLinkMode(mode);
+    setBidId('');
+  };
+
+  const canSubmit = (() => {
+    if (!form.startDate || !form.endDate || !form.projectManager) return false;
+    if (linkMode === 'bid') return !!bidId;
+    const amount = Number(form.amount);
+    return !!form.title.trim() && Number.isFinite(amount) && amount > 0 && !!form.customer.trim();
+  })();
 
   const handleSave = () => {
-    if (!bidId || !form.startDate || !form.endDate || !form.projectManager) return;
+    if (!canSubmit) return;
     const budgetCost = +form.budgetCost || 0;
+    if (linkMode === 'bid') {
+      onSave({
+        bid_id: bidId,
+        name: bid.project_name,
+        customer: bid.customer_name,
+        project_type: bid.project_type,
+        contract_amount: bid.bid_amount,
+        payment_method: bid.payment_method || '里程碑付款',
+        contract_no: form.contractNo || null,
+        start_date: form.startDate,
+        end_date: form.endDate,
+        budget_cost: budgetCost,
+        remaining_budget: budgetCost,
+        manager: form.projectManager,
+        members: form.members,
+      });
+      return;
+    }
     onSave({
-      bid_id: bidId,
-      name: bid.project_name,
-      customer: bid.customer_name,
-      project_type: bid.project_type,
-      contract_amount: bid.bid_amount,
-      payment_method: bid.payment_method || '里程碑付款',
-      contract_no: form.contractNo,
+      bid_id: null,
+      name: form.title.trim(),
+      customer: form.customer.trim(),
+      project_type: '直签',
+      contract_amount: Number(form.amount),
+      payment_method: '里程碑付款',
+      contract_no: form.contractNo || null,
       start_date: form.startDate,
       end_date: form.endDate,
       budget_cost: budgetCost,
@@ -68,71 +109,131 @@ function InitiateModal({ onClose, onSave }) {
       <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.12)] w-[560px] max-h-[90vh] flex flex-col animate-fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="font-semibold">项目立项</h3>
-          <button onClick={onClose}><X className="w-4 h-4" /></button>
+          <button type="button" onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-auto p-6 space-y-4">
           <div>
-            <label className="text-xs text-muted-foreground">关联商务项目（仅显示中标且未关联项目）*</label>
-            <select value={bidId} onChange={e => setBidId(e.target.value)}
-              className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400 cursor-pointer">
-              <option value="">请选择中标项目...</option>
-              {availableBids.map(b => <option key={b.id} value={b.id}>{b.project_name} · {b.customer_name}</option>)}
-            </select>
-            {availableBids.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">⚠️ 暂无可立项的中标项目，请先到「竞标管理」标记中标</p>
-            )}
+            <label className="text-xs text-muted-foreground">关联方式 *</label>
+            <div className="flex gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => switchMode('bid')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${linkMode === 'bid' ? 'bg-primary text-white' : 'bg-secondary text-muted-foreground hover:bg-border'}`}
+              >
+                关联中标竞标
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode('direct')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${linkMode === 'direct' ? 'bg-primary text-white' : 'bg-secondary text-muted-foreground hover:bg-border'}`}
+              >
+                直签项目
+              </button>
+            </div>
           </div>
-          {bid && (
-            <div className="bg-lime-50 border border-lime-200 rounded-xl p-4 space-y-2">
-              <p className="text-xs font-semibold text-lime-700 flex items-center gap-1">
-                ✓ 已自动同步竞标数据，立项后将沿用以下信息：
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div><span className="text-muted-foreground">客户：</span><span className="font-medium">{bid.customer_name}</span></div>
-                <div><span className="text-muted-foreground">项目类型：</span><span className="font-medium">{bid.project_type || '-'}</span></div>
-                <div><span className="text-muted-foreground">合同金额：</span><span className="font-medium text-lime-700">¥{((bid.bid_amount || 0) / 10000).toFixed(0)}万</span></div>
-                <div><span className="text-muted-foreground">商务负责人：</span><span className="font-medium">{bid.manager || '-'}</span></div>
-                <div className="col-span-2"><span className="text-muted-foreground">结算方式：</span><span className="font-medium text-lime-700">{bid.payment_method || '-'}</span></div>
+
+          {linkMode === 'bid' ? (
+            <div>
+              <label className="text-xs text-muted-foreground">关联商务项目（仅显示中标且未关联项目）*</label>
+              <select
+                value={bidId}
+                onChange={(e) => setBidId(e.target.value)}
+                className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400 cursor-pointer"
+              >
+                <option value="">请选择中标项目...</option>
+                {availableBids.map((b) => (
+                  <option key={b.id} value={b.id}>{b.project_name} · {b.customer_name}</option>
+                ))}
+              </select>
+              {availableBids.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">⚠️ 暂无可立项的中标项目，可改选「直签项目」或先到「竞标管理」标记中标</p>
+              )}
+              {bid && (
+                <div className="mt-3 bg-lime-50 border border-lime-200 rounded-xl p-4 space-y-2">
+                  <p className="text-xs font-semibold text-lime-700 flex items-center gap-1">
+                    ✓ 已自动同步竞标数据，立项后将沿用以下信息：
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-muted-foreground">客户：</span><span className="font-medium">{bid.customer_name}</span></div>
+                    <div><span className="text-muted-foreground">项目类型：</span><span className="font-medium">{bid.project_type || '-'}</span></div>
+                    <div><span className="text-muted-foreground">合同金额：</span><span className="font-medium text-lime-700">¥{((bid.bid_amount || 0) / 10000).toFixed(0)}万</span></div>
+                    <div><span className="text-muted-foreground">商务负责人：</span><span className="font-medium">{bid.manager || '-'}</span></div>
+                    <div className="col-span-2"><span className="text-muted-foreground">结算方式：</span><span className="font-medium text-lime-700">{bid.payment_method || '-'}</span></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">项目标题 *</label>
+                <input
+                  value={form.title}
+                  onChange={(e) => f('title', e.target.value)}
+                  placeholder="请输入直签项目名称"
+                  className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">项目金额（元）*</label>
+                <input
+                  type="number"
+                  value={form.amount}
+                  onChange={(e) => f('amount', e.target.value)}
+                  placeholder="合同/项目金额"
+                  className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">客户 *</label>
+                <input
+                  value={form.customer}
+                  onChange={(e) => f('customer', e.target.value)}
+                  placeholder="客户名称"
+                  className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400"
+                />
               </div>
             </div>
           )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">开始时间 *</label>
-              <input type="date" value={form.startDate} onChange={e => f('startDate', e.target.value)}
+              <input type="date" value={form.startDate} onChange={(e) => f('startDate', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">结束时间 *</label>
-              <input type="date" value={form.endDate} onChange={e => f('endDate', e.target.value)}
+              <input type="date" value={form.endDate} onChange={(e) => f('endDate', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">合同编号（可选）</label>
-              <input value={form.contractNo} onChange={e => f('contractNo', e.target.value)}
+              <input value={form.contractNo} onChange={(e) => f('contractNo', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">总成本预算（元）</label>
-              <input type="number" value={form.budgetCost} onChange={e => f('budgetCost', e.target.value)}
+              <input type="number" value={form.budgetCost} onChange={(e) => f('budgetCost', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">项目负责人 *<span className="ml-1 text-muted-foreground/60">（二级负责人）</span></label>
-              <EmployeePicker value={form.projectManager} onChange={v => f('projectManager', v)} placeholder="请选择项目负责人..." className="mt-1" />
+              <EmployeePicker value={form.projectManager} onChange={(v) => f('projectManager', v)} placeholder="请选择项目负责人..." className="mt-1" />
             </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">项目成员（三级负责人）</label>
-            <EmployeePicker value={form.members} onChange={v => f('members', v)} multiple placeholder="请选择项目成员..." className="mt-1" />
+            <EmployeePicker value={form.members} onChange={(v) => f('members', v)} multiple placeholder="请选择项目成员..." className="mt-1" />
           </div>
           <div className="bg-lime-50 border border-lime-200 rounded-xl p-3 text-xs text-lime-700">
             <strong>立项说明：</strong>提交后项目<b>直接立项启动</b>（免审批），并通知项目负责人与成员
+            {linkMode === 'direct' && <span>；直签项目不关联竞标商务。</span>}
           </div>
         </div>
         <div className="flex gap-2 px-6 py-4 border-t border-border">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-secondary rounded-xl text-sm hover:bg-border transition-colors">取消</button>
-          <button onClick={handleSave} disabled={!bidId || !form.startDate || !form.endDate || !form.projectManager}
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-secondary rounded-xl text-sm hover:bg-border transition-colors">取消</button>
+          <button type="button" onClick={handleSave} disabled={!canSubmit}
             className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-40">
             提交立项
           </button>
@@ -188,16 +289,16 @@ export default function ProjectManagement() {
     queryFn: () => api.entities.Approval.list('-created_date'),
   });
 
-  // 手动立项（从选中的中标竞标直接创建项目，立项免审批 → 直接执行中）
+  // 手动立项（中标关联或直签，免审批 → 直接执行中）
   const createMutation = useMutation({
     mutationFn: async (data) => {
       const project = await api.entities.Project.create({ ...data, status: '执行中' });
+      const source = data.bid_id ? '关联中标竞标' : '直签项目';
       await api.entities.ProjectLog.create({
         project_id: project.id, action: '项目立项',
-        detail: `创建项目「${data.name}」，合同金额¥${data.contract_amount}，预算¥${data.budget_cost}，立项免审批直接启动`,
+        detail: `${source}创建「${data.name}」，合同金额¥${data.contract_amount}，预算¥${data.budget_cost}，立项免审批直接启动`,
         operator: currentUserName,
       });
-      // 通知项目相关成员（负责人 + 成员）
       await notifyProjectStarted(project, data.manager, data.members);
       return project;
     },
