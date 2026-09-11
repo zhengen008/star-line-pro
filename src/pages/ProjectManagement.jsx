@@ -25,7 +25,7 @@ const STATUS_MAP = {
 
 /**
  * InitiateModal - 手动立项表单（仅管理员）
- * ① 关联中标竞标 或 ② 直签项目；提交后直接「执行中」（免审批）
+ * ① 关联中标竞标 或 ② 直签项目；提交后进入立项审批流（待审批）
  */
 function InitiateModal({ onClose, onSave }) {
   const [linkMode, setLinkMode] = useState('bid'); // bid | direct
@@ -226,8 +226,8 @@ function InitiateModal({ onClose, onSave }) {
             <label className="text-xs text-muted-foreground">项目成员（三级负责人）</label>
             <EmployeePicker value={form.members} onChange={(v) => f('members', v)} multiple placeholder="请选择项目成员..." className="mt-1" />
           </div>
-          <div className="bg-lime-50 border border-lime-200 rounded-xl p-3 text-xs text-lime-700">
-            <strong>立项说明：</strong>提交后项目<b>直接立项启动</b>（免审批），并通知项目负责人与成员
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+            <strong>立项说明：</strong>提交后进入<strong>项目立项审批</strong>，审批通过后项目才启动为「执行中」
             {linkMode === 'direct' && <span>；直签项目不关联竞标商务。</span>}
           </div>
         </div>
@@ -241,23 +241,6 @@ function InitiateModal({ onClose, onSave }) {
       </div>
     </div>
   );
-}
-
-// 项目立项成功后通知项目相关成员（负责人 + 成员）
-async function notifyProjectStarted(project, manager, members) {
-  try {
-    const recipients = [manager, ...(members || [])].filter(Boolean);
-    if (recipients.length === 0) return;
-    await api.functions.invoke('createNotification', {
-      recipients,
-      type: 'project_status',
-      title: `项目立项成功：${project.name}`,
-      content: `项目「${project.name}」已立项并启动，请关注项目进展`,
-      link: '/projects',
-      related_id: project.id,
-      priority: 'high',
-    });
-  } catch (e) { console.error('notifyProjectStarted failed:', e); }
 }
 
 export default function ProjectManagement() {
@@ -289,21 +272,35 @@ export default function ProjectManagement() {
     queryFn: () => api.entities.Approval.list('-created_date'),
   });
 
-  // 手动立项（中标关联或直签，免审批 → 直接执行中）
+  // 手动立项（中标关联或直签）→ 创建项目并进入立项审批流
   const createMutation = useMutation({
     mutationFn: async (data) => {
-      const project = await api.entities.Project.create({ ...data, status: '执行中' });
+      const project = await api.entities.Project.create({ ...data, status: '待立项' });
       const source = data.bid_id ? '关联中标竞标' : '直签项目';
       await api.entities.ProjectLog.create({
-        project_id: project.id, action: '项目立项',
-        detail: `${source}创建「${data.name}」，合同金额¥${data.contract_amount}，预算¥${data.budget_cost}，立项免审批直接启动`,
+        project_id: project.id,
+        action: '创建项目',
+        detail: `${source}创建「${data.name}」，合同金额¥${data.contract_amount}`,
         operator: currentUserName,
       });
-      await notifyProjectStarted(project, data.manager, data.members);
-      return project;
+      return submitProjectInitiation({
+        project,
+        formData: {
+          contract_no: data.contract_no,
+          start_date: data.start_date,
+          end_date: data.end_date,
+          budget_cost: data.budget_cost,
+          remaining_budget: data.remaining_budget,
+          manager: data.manager,
+          members: data.members || [],
+        },
+        operatorName: currentUserName,
+        operatorDept: currentEmployee?.department || '',
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['all-approvals'] });
       setShowNew(false);
     },
   });
