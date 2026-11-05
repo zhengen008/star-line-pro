@@ -8,7 +8,7 @@ const ENTITIES = [
   'Employee', 'Department', 'Role', 'Bid', 'Project', 'ProjectLog',
   'Approval', 'ProjectApproval', 'WorkflowTemplate', 'Notice',
   'Notification', 'Banner', 'CheckIn', 'Memo',
-  'ExecutionItem', 'SupplierItem', 'ExecutionSheet',
+  'ExecutionItem', 'SupplierItem', 'ExecutionSheet', 'ProjectAcceptance',
 ];
 
 // Convert Prisma result: Decimal → Number, dates → ISO strings

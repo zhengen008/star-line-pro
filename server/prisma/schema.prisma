@@ -147,6 +147,7 @@ model Project {
   approvals         ProjectApproval[]
   execution_items   ExecutionItem[]
   execution_sheets  ExecutionSheet[]
+  acceptances       ProjectAcceptance[]
 
   @@index([project_id])
   @@index([customer])
@@ -441,4 +442,36 @@ model SupplierItem {
   @@index([execution_item_id])
   @@index([approval_id])
   @@map("supplier_items")
+}
+
+// ============================================================
+// 18. 项目验收期次 (ProjectAcceptance)
+// 按结算方式生成的验收期次，逐期登记验收 / 开票 / 回款
+// ============================================================
+model ProjectAcceptance {
+  id               String   @id @default(cuid())
+  project_id       String
+  seq              Int
+  period_label     String
+  period_start     String?
+  period_end       String?
+  planned_amount   Decimal? @db.Decimal(14, 2)
+  status           String   @default("待验收") // 待验收|已验收
+  accepted_amount  Decimal? @db.Decimal(14, 2)
+  accepted_date    String?
+  invoice_status   String   @default("未开票") // 未开票|已开票
+  invoice_amount   Decimal? @db.Decimal(14, 2)
+  invoice_date     String?
+  received_amount  Decimal? @db.Decimal(14, 2)
+  received_date    String?
+  remark           String?  @db.Text
+  created_by       String?
+  created_by_id    String?
+  created_date     DateTime @default(now())
+  updated_date     DateTime @updatedAt
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("project_acceptances")
 }
