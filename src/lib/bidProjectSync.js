@@ -19,6 +19,21 @@ export function shouldSyncBidToProject(project) {
 }
 
 /**
+ * 立项表单可选的商务记录：已中标，且没有关联项目或关联项目仍为待立项。
+ * @returns {Array<{ bid: object, project: object|null }>}
+ */
+export function listInitiatableBids(bids = [], projects = []) {
+  const projectByBid = new Map();
+  projects.forEach((p) => {
+    if (p.bid_id && !p.is_deleted) projectByBid.set(p.bid_id, p);
+  });
+  return bids
+    .filter((b) => b.result === '中标')
+    .map((bid) => ({ bid, project: projectByBid.get(bid.id) || null }))
+    .filter(({ project }) => !project || project.status === '待立项');
+}
+
+/**
  * 负责人（一级）或管理员可提交立项。
  * @param {object} project
  * @param {{ isAdmin?: boolean, currentUserName?: string }} ctx

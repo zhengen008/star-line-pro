@@ -4,6 +4,7 @@ import {
   buildPendingProjectSyncFromBid,
   shouldSyncBidToProject,
   canSubmitProjectInitiation,
+  listInitiatableBids,
 } from './bidProjectSync.js';
 
 describe('bidProjectSync', () => {
@@ -38,5 +39,26 @@ describe('bidProjectSync', () => {
     assert.equal(canSubmitProjectInitiation(p, { isAdmin: false, currentUserName: '李四' }), true);
     assert.equal(canSubmitProjectInitiation(p, { isAdmin: false, currentUserName: '别人' }), false);
     assert.equal(canSubmitProjectInitiation({ ...p, status: '执行中' }, { isAdmin: true }), false);
+  });
+
+  it('lists won bids that are not yet initiated', () => {
+    const bids = [
+      { id: 'b1', result: '中标' },
+      { id: 'b2', result: '中标' },
+      { id: 'b3', result: '中标' },
+      { id: 'b4', result: '未中标' },
+      { id: 'b5', result: '中标' },
+    ];
+    const projects = [
+      { id: 'p2', bid_id: 'b2', status: '待立项' },
+      { id: 'p3', bid_id: 'b3', status: '执行中' },
+      { id: 'p5', bid_id: 'b5', status: '执行中', is_deleted: true },
+    ];
+    const result = listInitiatableBids(bids, projects);
+    assert.deepEqual(result.map((r) => [r.bid.id, r.project?.id ?? null]), [
+      ['b1', null],
+      ['b2', 'p2'],
+      ['b5', null],
+    ]);
   });
 });
