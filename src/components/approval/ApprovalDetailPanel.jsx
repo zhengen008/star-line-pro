@@ -50,7 +50,12 @@ export default function ApprovalDetailPanel({ item, onClose, onApprove, currentU
 
   if (!item) return null;
 
-  const fields = (() => { try { return JSON.parse(item.fields || '{}'); } catch { return {}; } })();
+  const fields = (() => {
+    try {
+      const parsed = JSON.parse(item.fields || '{}');
+      return Object.fromEntries(Object.entries(parsed).filter(([k]) => !k.endsWith('_id')));
+    } catch { return {}; }
+  })();
   const steps = parseSteps(item.steps);
   const typeConfig = getApprovalTypeConfig(item.type);
   const TypeIcon = typeConfig?.icon;

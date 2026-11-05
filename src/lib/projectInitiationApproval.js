@@ -3,6 +3,17 @@
  */
 import { api as defaultApi } from '@/api/client';
 import { createApprovalWithSteps } from '@/lib/createApprovalWithSteps';
+import { ensureAcceptancePeriods } from '@/lib/projectAcceptance';
+
+export const INITIATION_SHEET_NAME = '立项服务内容';
+
+/** 立项审批结果同步到随立项提交的服务内容 Sheet */
+async function syncInitiationSheet(approval, sheetStatus, apiClient) {
+  let sheetId = null;
+  try { sheetId = JSON.parse(approval?.fields || '{}').initiation_sheet_id || null; } catch { /* ignore */ }
+  if (!sheetId) return;
+  await apiClient.entities.ExecutionSheet.update(sheetId, { status: sheetStatus });
+}
 
 /** 审批通过后通知项目负责人与成员 */
 export async function notifyProjectInitiationApproved(project, manager, members, apiClient = defaultApi) {
@@ -39,6 +50,13 @@ export async function finalizeProjectInitiationApproved({
     operator: operatorName,
   });
 
+  await syncInitiationSheet(approval, '已通过', apiClient);
+  try {
+    await ensureAcceptancePeriods({ ...project, ...updated }, apiClient);
+  } catch (e) {
+    console.error('ensureAcceptancePeriods failed:', e);
+  }
+
   await notifyProjectInitiationApproved(
     updated,
     updated.manager || project.manager,
@@ -69,6 +87,7 @@ export async function handleProjectInitiationRejected({
 }) {
   if (!projectId) return;
   await apiClient.entities.Project.update(projectId, { status: '待立项' });
+  await syncInitiationSheet(approval, '已拒绝', apiClient);
   await apiClient.entities.ProjectLog.create({
     project_id: projectId,
     action: '立项审批被拒绝',
@@ -84,12 +103,41 @@ export function isProjectInitiationApproval(approval) {
     || (approval.type === 'project_init' && approval.type_label === '项目立项');
 }
 
+/** 立项时导入的服务内容 → 「立项服务内容」Sheet（待审核，随立项审批同步状态） */
+async function createInitiationSheet(project, serviceItems, apiClient) {
+  const sheet = await apiClient.entities.ExecutionSheet.create({
+    project_id: project.id,
+    name: INITIATION_SHEET_NAME,
+    status: '待审核',
+  });
+  for (const item of serviceItems) {
+    await apiClient.entities.ExecutionItem.create({
+      seq_id: item.seq_id || null,
+      content: item.content,
+      detail: item.detail || null,
+      unit: item.unit || null,
+      quantity: item.quantity ?? null,
+      init_price: item.init_price ?? null,
+      init_total: item.init_total ?? null,
+      budget_price: item.budget_price ?? null,
+      budget_total: item.budget_total ?? null,
+      project_id: project.id,
+      project_name: project.name,
+      sheet_id: sheet.id,
+      is_service_addon: true,
+    });
+  }
+  return sheet;
+}
+
 /**
  * 待立项项目提交立项 → 更新项目字段并置为待审批，创建立项审批单。
+ * serviceItems：立项表单导入的服务内容行（parseExecutionRows 结果）。
  */
 export async function submitProjectInitiation({
   project,
   formData,
+  serviceItems = [],
   operatorName,
   operatorDept = '',
   apiClient = defaultApi,
@@ -97,29 +145,36 @@ export async function submitProjectInitiation({
   if (!project?.id) throw new Error('项目不存在');
   if (project.status !== '待立项') throw new Error('仅待立项项目可提交立项审批');
 
-  const fieldsPayload = {
-    项目名称: project.name,
-    客户: project.customer || '-',
-    合同编号: formData.contract_no || '-',
-    开始时间: formData.start_date,
-    结束时间: formData.end_date,
-    成本预算: formData.budget_cost,
-    项目负责人: formData.manager,
-    项目成员: (formData.members || []).join('、') || '-',
-  };
-
+  const paymentMethod = formData.payment_method || project.payment_method || '';
   const projectUpdate = {
     contract_no: formData.contract_no || null,
     start_date: formData.start_date,
     end_date: formData.end_date,
-    budget_cost: formData.budget_cost,
-    remaining_budget: formData.remaining_budget ?? formData.budget_cost,
     manager: formData.manager,
     members: formData.members || [],
+    payment_method: paymentMethod || null,
     status: '待审批',
   };
 
   const updated = await apiClient.entities.Project.update(project.id, projectUpdate);
+
+  const sheet = serviceItems.length > 0
+    ? await createInitiationSheet(project, serviceItems, apiClient)
+    : null;
+
+  const fieldsPayload = {
+    项目名称: project.name,
+    客户: project.customer || '-',
+    合同金额: Number(project.contract_amount) || 0,
+    结算方式: paymentMethod || '-',
+    合同编号: formData.contract_no || '-',
+    开始时间: formData.start_date,
+    结束时间: formData.end_date,
+    项目负责人: formData.manager,
+    项目成员: (formData.members || []).join('、') || '-',
+    服务内容: sheet ? `${serviceItems.length} 条` : '-',
+    ...(sheet ? { initiation_sheet_id: sheet.id } : {}),
+  };
 
   const approval = await createApprovalWithSteps({
     title: `项目立项-${project.name}`,
@@ -136,10 +191,12 @@ export async function submitProjectInitiation({
     cc_list: [],
   }, apiClient);
 
+  if (sheet) await apiClient.entities.ExecutionSheet.update(sheet.id, { approval_id: approval.id });
+
   await apiClient.entities.ProjectLog.create({
     project_id: project.id,
     action: '提交立项审批',
-    detail: `提交立项审批，预算¥${formData.budget_cost}，负责人 ${formData.manager}`,
+    detail: `提交立项审批，负责人 ${formData.manager}${sheet ? `，附服务内容 ${serviceItems.length} 条` : ''}`,
     operator: operatorName,
   });
 
