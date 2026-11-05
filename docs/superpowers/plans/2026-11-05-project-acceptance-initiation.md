@@ -1,6 +1,6 @@
 # 项目验收进度 / 回款 / 统一立项 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 按 `docs/superpowers/specs/2026-11-05-project-acceptance-initiation-design.md` 实现验收期次与回款登记、去掉成本预算、统一立项表单并支持立项时导入服务内容。
 
@@ -29,11 +29,11 @@
 - Produces: `buildAcceptancePeriods({ startDate, endDate, paymentMethod, contractAmount }) → Array<{ seq, period_label, period_start, period_end, planned_amount }>`
 - Produces: `summarizeAcceptances(rows) → { totalPeriods, acceptedPeriods, acceptedAmount, invoicedAmount, uninvoicedAcceptedAmount, receivedAmount, unreceivedAmount }`
 
-- [ ] Step 1: 写失败测试，覆盖：月付跨年且首末截断（2026-11-15 ~ 2027-01-10 → 3 期，标签 2026年11月 / 2026年12月 / 2027年1月）、季付（2026-02-01 ~ 2026-12-31 → Q1..Q4，Q1 起点 02-01）、半年付、年付、结束后支付 / 里程碑付款 / 空 → 1 期「全周期」、金额 100 分 3 期 → 33.33 / 33.33 / 33.34、结束早于开始或缺日期 → `[]`、汇总（只统计已验收期次的验收金额，已开票期次的开票金额，回款求和，未开票 / 未回款不为负）。
-- [ ] Step 2: 运行确认失败（模块不存在）。
-- [ ] Step 3: 实现。日期用 `YYYY-MM-DD` 字符串与 UTC `Date` 计算，避免时区偏移。
-- [ ] Step 4: 运行通过。
-- [ ] Step 5: Commit。
+- [x] Step 1: 写失败测试，覆盖：月付跨年且首末截断（2026-11-15 ~ 2027-01-10 → 3 期，标签 2026年11月 / 2026年12月 / 2027年1月）、季付（2026-02-01 ~ 2026-12-31 → Q1..Q4，Q1 起点 02-01）、半年付、年付、结束后支付 / 里程碑付款 / 空 → 1 期「全周期」、金额 100 分 3 期 → 33.33 / 33.33 / 33.34、结束早于开始或缺日期 → `[]`、汇总（只统计已验收期次的验收金额，已开票期次的开票金额，回款求和，未开票 / 未回款不为负）。
+- [x] Step 2: 运行确认失败（模块不存在）。
+- [x] Step 3: 实现。日期用 `YYYY-MM-DD` 字符串与 UTC `Date` 计算，避免时区偏移。
+- [x] Step 4: 运行通过。
+- [x] Step 5: Commit。
 
 ### Task 2: 可立项商务记录筛选
 
@@ -44,9 +44,9 @@
 **Interfaces:**
 - Produces: `listInitiatableBids(bids, projects) → Array<{ bid, project|null }>`：`result === '中标'`，且无未删除关联项目或关联项目 `status === '待立项'`。
 
-- [ ] Step 1: 失败测试（未中标排除；无项目 → project null；待立项 → 带项目；执行中 → 排除；已删除项目视为无项目）。
-- [ ] Step 2–4: 实现并通过。
-- [ ] Step 5: Commit。
+- [x] Step 1: 失败测试（未中标排除；无项目 → project null；待立项 → 带项目；执行中 → 排除；已删除项目视为无项目）。
+- [x] Step 2–4: 实现并通过。
+- [x] Step 5: Commit。
 
 ### Task 3: 后端 — 数据表、实体注册、Excel 预览、模板
 
@@ -57,9 +57,9 @@
 - Create: `public/templates/execution-items-template.xlsx`（复制根目录模板）
 - Create: `src/lib/executionTemplate.js`（`EXECUTION_TEMPLATE_URL`、`EXECUTION_TEMPLATE_NAME`）
 
-- [ ] Step 1: 修改 schema；`cd server; npx prisma generate; npx prisma db push`（需数据库可用）。
-- [ ] Step 2: 实现 `parseExecutionRows` 与 `dry_run`，用 `node -e` 读取模板验证解析出 2 行。
-- [ ] Step 3: Commit。
+- [x] Step 1: 修改 schema；`cd server; npx prisma generate; npx prisma db push`（需数据库可用）。
+- [x] Step 2: 实现 `parseExecutionRows` 与 `dry_run`，用 `node -e` 读取模板验证解析出 2 行。
+- [x] Step 3: Commit。
 
 ### Task 4: 立项提交 / 通过 / 拒绝副作用
 
@@ -71,11 +71,11 @@
 - Produces: `submitProjectInitiation({ project, formData, serviceItems = [], operatorName, operatorDept, apiClient })`；`formData` 不再含预算。
 - Produces: `ensureAcceptancePeriods(project, apiClient) → rows`（已有则跳过）。
 
-- [ ] 去掉预算字段与日志中的预算；`fields` 加「合同金额」「结算方式」「服务内容条数」与 `initiation_sheet_id`。
-- [ ] `serviceItems` 非空 → 创建 Sheet「立项服务内容」(待审核) + ExecutionItem。
-- [ ] `finalizeProjectInitiationApproved`：生成验收期次、Sheet → 已通过。
-- [ ] `handleProjectInitiationRejected`：Sheet → 已拒绝（需传入 approval.fields）。
-- [ ] Commit。
+- [x] 去掉预算字段与日志中的预算；`fields` 加「合同金额」「结算方式」「服务内容条数」与 `initiation_sheet_id`。
+- [x] `serviceItems` 非空 → 创建 Sheet「立项服务内容」(待审核) + ExecutionItem。
+- [x] `finalizeProjectInitiationApproved`：生成验收期次、Sheet → 已通过。
+- [x] `handleProjectInitiationRejected`：Sheet → 已拒绝（需传入 approval.fields）。
+- [x] Commit。
 
 ### Task 5: 统一立项表单
 
@@ -86,8 +86,8 @@
 - Modify: `src/pages/ProjectDetail.jsx`（「提交立项」改用新弹窗）
 - Delete: `src/components/project/SubmitInitiationModal.jsx`
 
-- [ ] 实现；手动兜底需结算方式选择。
-- [ ] Commit。
+- [x] 实现；手动兜底需结算方式选择。
+- [x] Commit。
 
 ### Task 6: 详情页验收与回款
 
@@ -96,18 +96,18 @@
 - Modify: `src/components/project/ProjectProgress.jsx`（新增 `AcceptanceProgress`）
 - Modify: `src/pages/ProjectDetail.jsx`（5 张卡片、验收进度条、区块、收入明细标题）
 
-- [ ] 实现：期次表、生成 / 重新生成、登记弹窗（验收 / 开票 / 回款）、写日志。
-- [ ] Commit。
+- [x] 实现：期次表、生成 / 重新生成、登记弹窗（验收 / 开票 / 回款）、写日志。
+- [x] Commit。
 
 ### Task 7: 去掉成本预算与收款口径统一
 
 **Files:**
 - Modify: `src/components/project/EditProjectModal.jsx`、`src/lib/applyApprovalDecision.js`、`src/lib/submitSupplierPaymentApproval.js`、`src/components/project/ProjectCard.jsx`、`src/pages/ProjectStats.jsx`、`src/pages/WorkflowEditor.jsx`、`src/pages/BusinessManagement.jsx`（结算方式加「年付」）、`src/pages/ServiceManagement.jsx`（模板下载）
 
-- [ ] 实现；项目卡片与统计页回款取 `ProjectAcceptance`。
-- [ ] Commit。
+- [x] 实现；项目卡片与统计页回款取 `ProjectAcceptance`。
+- [x] Commit。
 
 ### Task 8: 验证
 
-- [ ] 全部单测、`npm run lint`、`npm run build`。
-- [ ] 数据库可用时：`prisma db push`，启动前后端，浏览器走查立项 → 审批 → 期次 → 登记 → 汇总。
+- [x] 全部单测、`npm run lint`、`npm run build`。
+- [x] 数据库可用时：`prisma db push`，启动前后端，浏览器走查立项 → 审批 → 期次 → 登记 → 汇总。

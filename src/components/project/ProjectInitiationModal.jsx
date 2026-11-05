@@ -59,12 +59,12 @@ export default function ProjectInitiationModal({ project: lockedProject = null, 
   const [form, setForm] = useState(() => initialForm(lockedProject));
   const [serviceItems, setServiceItems] = useState([]);
 
-  const { data: bids = [] } = useQuery({
+  const { data: bids = [], isLoading: bidsLoading } = useQuery({
     queryKey: ['bids-for-initiation'],
     queryFn: () => api.entities.Bid.list('-created_date', 500),
     enabled: !lockedProject,
   });
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ['projects-for-initiation'],
     queryFn: () => api.entities.Project.list('-created_date', 500),
     enabled: !lockedProject,
@@ -157,14 +157,14 @@ export default function ProjectInitiationModal({ project: lockedProject = null, 
             <div>
               <label className={formLabelClass}>关联商务项目 *</label>
               <select value={bidId} onChange={(e) => selectBid(e.target.value)} className={formSelectClass}>
-                <option value="">请选择已中标的商务项目…</option>
+                <option value="">{bidsLoading || projectsLoading ? '加载中…' : '请选择已中标的商务项目…'}</option>
                 {options.map(({ bid, project }) => (
                   <option key={bid.id} value={bid.id}>
                     {bid.project_name} · {bid.customer_name || '-'}{project ? '（待立项）' : ''}
                   </option>
                 ))}
               </select>
-              {options.length === 0 && (
+              {!bidsLoading && !projectsLoading && options.length === 0 && (
                 <p className="text-xs text-amber-600 mt-1">暂无可立项的中标项目，请先到「商务管理」标记中标</p>
               )}
             </div>
