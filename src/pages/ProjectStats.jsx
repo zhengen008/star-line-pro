@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import { summarizeAcceptances } from '@/lib/acceptancePeriods';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const STATUS_COLORS = { '执行中': '#e26b58', '完成审批中': '#c084fc', '已完成': '#10b981', '已归档': '#94a3b8' };
@@ -23,8 +24,12 @@ export default function ProjectStats() {
     queryKey: ['all-approvals'],
     queryFn: () => api.entities.Approval.list(),
   });
+  const { data: allAcceptances = [], isLoading: loadingAcceptances } = useQuery({
+    queryKey: ['all-acceptances'],
+    queryFn: () => api.entities.ProjectAcceptance.list('seq', 5000),
+  });
 
-  if (loadingProjects || loadingApprovals) {
+  if (loadingProjects || loadingApprovals || loadingAcceptances) {
     return <div className="flex items-center justify-center h-full text-muted-foreground text-sm">加载中...</div>;
   }
 
@@ -32,32 +37,37 @@ export default function ProjectStats() {
   const projects = allProjects.filter(p => !p.is_deleted);
   const deletedIds = new Set(allProjects.filter(p => p.is_deleted).map(p => p.id));
   const approvals = allApprovals.filter(a => !a.project_id || !deletedIds.has(a.project_id));
+  const acceptances = allAcceptances.filter(a => !deletedIds.has(a.project_id));
+  const expenseOf = (list) => list.filter(a => a.direction === '支出' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0);
 
   const statusDist = Object.entries(
     projects.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc; }, {})
   ).map(([name, value]) => ({ name, value, color: STATUS_COLORS[name] || '#d1d5db' }));
 
   const totalContract = projects.reduce((s, p) => s + (p.contract_amount || 0), 0);
-  const totalBudget = projects.reduce((s, p) => s + (p.budget_cost || 0), 0);
-  const totalIncome = approvals.filter(a => a.direction === '收入' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0);
-  const totalExpense = approvals.filter(a => a.direction === '支出' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0);
+  const totalAcc = summarizeAcceptances(acceptances);
+  const totalReceived = totalAcc.receivedAmount;
+  const totalExpense = expenseOf(approvals);
 
-  const projectFinance = projects.map(p => {
-    const pa = approvals.filter(a => a.project_id === p.id);
-    return {
-      name: p.name?.length > 8 ? p.name.slice(0, 8) + '…' : p.name,
-      合同额: Math.round((p.contract_amount || 0) / 10000),
-      预算: Math.round((p.budget_cost || 0) / 10000),
-      已收款: Math.round(pa.filter(a => a.direction === '收入' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0) / 10000),
-      已支出: Math.round(pa.filter(a => a.direction === '支出' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0) / 10000),
-    };
+  const rows = projects.map(p => {
+    const acc = summarizeAcceptances(acceptances.filter(a => a.project_id === p.id));
+    const expense = expenseOf(approvals.filter(a => a.project_id === p.id));
+    return { project: p, accepted: acc.acceptedAmount, received: acc.receivedAmount, expense };
   });
+
+  const projectFinance = rows.map(({ project: p, accepted, received, expense }) => ({
+    name: p.name?.length > 8 ? p.name.slice(0, 8) + '…' : p.name,
+    合同额: Math.round((p.contract_amount || 0) / 10000),
+    已验收: Math.round(accepted / 10000),
+    已回款: Math.round(received / 10000),
+    已支出: Math.round(expense / 10000),
+  }));
 
   const STATS = [
     { label: '项目总数', value: `${projects.length}个`, sub: '已创建', color: 'text-foreground' },
-    { label: '合同总额', value: `¥${(totalContract / 10000).toFixed(0)}万`, sub: '已签约', color: 'text-primary' },
-    { label: '已收款', value: `¥${(totalIncome / 10000).toFixed(1)}万`, sub: totalContract ? `收款率 ${((totalIncome / totalContract) * 100).toFixed(1)}%` : '-', color: 'text-green-600' },
-    { label: '已支出', value: `¥${(totalExpense / 10000).toFixed(1)}万`, sub: totalBudget ? `预算使用 ${((totalExpense / totalBudget) * 100).toFixed(1)}%` : '-', color: 'text-orange-600' },
+    { label: '合同总额', value: `¥${(totalContract / 10000).toFixed(0)}万`, sub: `已验收 ¥${(totalAcc.acceptedAmount / 10000).toFixed(1)}万`, color: 'text-primary' },
+    { label: '已回款', value: `¥${(totalReceived / 10000).toFixed(1)}万`, sub: totalContract ? `回款率 ${((totalReceived / totalContract) * 100).toFixed(1)}%` : '-', color: 'text-green-600' },
+    { label: '已支出', value: `¥${(totalExpense / 10000).toFixed(1)}万`, sub: '项目累计花费', color: 'text-orange-600' },
   ];
 
   return (
@@ -83,8 +93,8 @@ export default function ProjectStats() {
                 <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="合同额" fill="#e26b58" radius={[4,4,0,0]} />
-                <Bar dataKey="预算" fill="#fca5a5" radius={[4,4,0,0]} />
-                <Bar dataKey="已收款" fill="#34d399" radius={[4,4,0,0]} />
+                <Bar dataKey="已验收" fill="#818cf8" radius={[4,4,0,0]} />
+                <Bar dataKey="已回款" fill="#34d399" radius={[4,4,0,0]} />
                 <Bar dataKey="已支出" fill="#94a3b8" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -122,7 +132,7 @@ export default function ProjectStats() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b border-border/50">
-                {['项目名称', '客户', '合同金额', '成本预算', '已收款', '已支出', '毛利润', '状态'].map((h, i) => (
+                {['项目名称', '客户', '合同金额', '已验收', '已回款', '已支出', '毛利润', '状态'].map((h, i) => (
                   <th key={h} className={`text-left font-medium pb-3 ${i === 0 ? 'pl-2' : ''}`}>{h}</th>
                 ))}
               </tr>
@@ -131,18 +141,15 @@ export default function ProjectStats() {
               {projects.length === 0 && (
                 <tr><td colSpan={8} className="py-10 text-center text-sm text-muted-foreground">暂无项目</td></tr>
               )}
-              {projects.map(p => {
-              const pa = approvals.filter(a => a.project_id === p.id);
-              const income = pa.filter(a => a.direction === '收入' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0);
-              const expense = pa.filter(a => a.direction === '支出' && (a.status === '已通过' || a.status === '已付款')).reduce((s, a) => s + (a.amount || 0), 0);
-              const profit = income - expense;
+              {rows.map(({ project: p, accepted, received, expense }) => {
+              const profit = received - expense;
               return (
                 <tr key={p.id} className="group border-b border-border/20 last:border-0 hover:bg-secondary/20 transition-colors">
                   <td className="py-4 pl-2 font-medium">{p.name}</td>
                   <td className="py-4 text-xs text-muted-foreground">{p.customer}</td>
                   <td className="py-4 font-medium">¥{((p.contract_amount || 0) / 10000).toFixed(0)}万</td>
-                  <td className="py-4 text-muted-foreground">¥{((p.budget_cost || 0) / 10000).toFixed(0)}万</td>
-                  <td className="py-4 text-green-600 font-semibold">+¥{(income / 10000).toFixed(1)}万</td>
+                  <td className="py-4 text-indigo-600">¥{(accepted / 10000).toFixed(1)}万</td>
+                  <td className="py-4 text-green-600 font-semibold">+¥{(received / 10000).toFixed(1)}万</td>
                   <td className="py-4 text-red-600 font-semibold">-¥{(expense / 10000).toFixed(1)}万</td>
                   <td className="py-4">
                     <span className={`font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>

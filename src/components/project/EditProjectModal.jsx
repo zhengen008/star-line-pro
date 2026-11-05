@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import EmployeePicker from '../EmployeePicker';
-
-const PAYMENT_METHODS = ['里程碑付款', '月结', '验收付款', '预付款'];
+import { SETTLEMENT_METHODS } from '@/lib/acceptancePeriods';
 
 export default function EditProjectModal({ project, onClose, onSave }) {
   const [form, setForm] = useState({
     contract_no: project.contract_no || '',
     start_date: project.start_date || '',
     end_date: project.end_date || '',
-    budget_cost: project.budget_cost || 0,
-    payment_method: project.payment_method || '里程碑付款',
+    payment_method: project.payment_method || SETTLEMENT_METHODS[0],
     members: project.members || [],
   });
+  const paymentOptions = SETTLEMENT_METHODS.includes(project.payment_method) || !project.payment_method
+    ? SETTLEMENT_METHODS
+    : [project.payment_method, ...SETTLEMENT_METHODS];
 
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -20,7 +21,6 @@ export default function EditProjectModal({ project, onClose, onSave }) {
   if (form.contract_no !== (project.contract_no || '')) changes['合同编号'] = `${project.contract_no || '-'} → ${form.contract_no || '-'}`;
   if (form.start_date !== (project.start_date || '')) changes['开始时间'] = `${project.start_date || '-'} → ${form.start_date}`;
   if (form.end_date !== (project.end_date || '')) changes['结束时间'] = `${project.end_date || '-'} → ${form.end_date}`;
-  if (form.budget_cost !== (project.budget_cost || 0)) changes['成本预算'] = `¥${project.budget_cost || 0} → ¥${form.budget_cost}`;
   if (form.payment_method !== (project.payment_method || '')) changes['结算方式'] = `${project.payment_method || '-'} → ${form.payment_method}`;
   if (JSON.stringify(form.members) !== JSON.stringify(project.members || [])) changes['项目成员'] = `- → ${form.members.join(',')}`;
 
@@ -41,11 +41,6 @@ export default function EditProjectModal({ project, onClose, onSave }) {
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">总成本预算（元）</label>
-              <input type="number" value={form.budget_cost} onChange={e => f('budget_cost', +e.target.value)}
-                className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
-            </div>
-            <div>
               <label className="text-xs text-muted-foreground">开始时间 *</label>
               <input type="date" value={form.start_date} onChange={e => f('start_date', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
@@ -56,10 +51,10 @@ export default function EditProjectModal({ project, onClose, onSave }) {
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">结算方式</label>
+              <label className="text-xs text-muted-foreground">结算方式（验收周期）</label>
               <select value={form.payment_method} onChange={e => f('payment_method', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400 cursor-pointer">
-                {PAYMENT_METHODS.map(p => <option key={p}>{p}</option>)}
+                {paymentOptions.map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
           </div>

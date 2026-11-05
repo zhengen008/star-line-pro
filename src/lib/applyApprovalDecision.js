@@ -74,21 +74,6 @@ export async function applyApprovalDecision({
   if (updatedSteps) updateData.steps = JSON.stringify(updatedSteps);
   await apiClient.entities.Approval.update(target.id, updateData);
 
-  if (action === true && target.project_id && target.direction === '支出' && target.amount > 0) {
-    const projects = await apiClient.entities.Project.filter({ id: target.project_id });
-    if (projects.length > 0) {
-      const proj = projects[0];
-      const newRemaining = (proj.remaining_budget ?? proj.budget_cost ?? 0) - target.amount;
-      await apiClient.entities.Project.update(proj.id, { remaining_budget: newRemaining });
-      await apiClient.entities.ProjectLog.create({
-        project_id: proj.id,
-        action: '预算扣减',
-        detail: `审批「${target.title}」通过，扣减¥${target.amount.toLocaleString()}，剩余预算¥${newRemaining.toLocaleString()}`,
-        operator: operatorName,
-      });
-    }
-  }
-
   if (action === true && target.type_label === '项目变更' && target.project_id) {
     try {
       const fields = JSON.parse(target.fields || '{}');
@@ -98,7 +83,6 @@ export async function applyApprovalDecision({
         if (label === '合同编号') projectUpdate.contract_no = newVal === '-' ? '' : newVal;
         if (label === '开始时间') projectUpdate.start_date = newVal === '-' ? '' : newVal;
         if (label === '结束时间') projectUpdate.end_date = newVal === '-' ? '' : newVal;
-        if (label === '成本预算') projectUpdate.budget_cost = parseFloat(String(newVal).replace(/[¥,]/g, '')) || 0;
         if (label === '结算方式') projectUpdate.payment_method = newVal === '-' ? '' : newVal;
       });
       if (Object.keys(projectUpdate).length > 0) {

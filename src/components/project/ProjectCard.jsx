@@ -1,9 +1,10 @@
 /**
  * ProjectCard - 项目卡片（用于统一的卡片网格视图）
- * 展示：名称/客户、进度条、负责人、收支、状态徽章
+ * 展示：名称/客户、时间与验收进度、负责人、回款与支出、状态徽章
  */
 import { AlertTriangle, Users } from 'lucide-react';
-import ProjectProgress, { calcProgress } from './ProjectProgress';
+import ProjectProgress, { calcProgress, AcceptanceProgress } from './ProjectProgress';
+import { summarizeAcceptances } from '@/lib/acceptancePeriods';
 
 const STATUS_COLORS = {
   '待立项': 'bg-amber-100 text-amber-700',
@@ -14,14 +15,12 @@ const STATUS_COLORS = {
   '已归档': 'bg-gray-100 text-gray-600',
 };
 
-export default function ProjectCard({ project, onSelect, approvals = [] }) {
+export default function ProjectCard({ project, onSelect, approvals = [], acceptances = [] }) {
   const pa = approvals.filter(a => a.project_id === project.id);
   const expense = pa.filter(a => a.direction === '支出' && (a.status === '已通过' || a.status === '已付款'))
     .reduce((s, a) => s + (a.amount || 0), 0);
-  const income = pa.filter(a => a.direction === '收入' && (a.status === '已通过' || a.status === '已付款'))
-    .reduce((s, a) => s + (a.amount || 0), 0);
+  const acc = summarizeAcceptances(acceptances.filter(a => a.project_id === project.id));
   const pendingCount = pa.filter(a => a.status === '待审核' || a.status === '审核中').length;
-  const remaining = (project.budget_cost || 0) - expense;
   const { overdue } = calcProgress(project.start_date, project.end_date);
   const isActive = !['已完成', '已归档'].includes(project.status);
   const showOverdue = overdue && isActive;
@@ -46,6 +45,7 @@ export default function ProjectCard({ project, onSelect, approvals = [] }) {
         ? <ProjectProgress startDate={project.start_date} endDate={project.end_date} status={project.status} />
         : isActive && <p className="text-xs text-muted-foreground/60">未设置时间区间</p>
       }
+      <AcceptanceProgress accepted={acc.acceptedPeriods} total={acc.totalPeriods} />
 
       <div className="flex items-center gap-1.5">
         <div className="w-5 h-5 rounded-full bg-lime-400 flex items-center justify-center text-white shrink-0" style={{ fontSize: 9 }}>{project.manager?.[0] || '?'}</div>
@@ -58,12 +58,12 @@ export default function ProjectCard({ project, onSelect, approvals = [] }) {
 
       <div className="grid grid-cols-2 gap-1 text-xs">
         <div className="bg-green-50 rounded-lg px-2 py-1 text-center">
-          <p className="text-green-600 font-medium">+¥{(income / 10000).toFixed(2)}万</p>
-          <p className="text-green-500" style={{ fontSize: 10 }}>已收款</p>
+          <p className="text-green-600 font-medium">+¥{(acc.receivedAmount / 10000).toFixed(2)}万</p>
+          <p className="text-green-500" style={{ fontSize: 10 }}>已回款</p>
         </div>
-        <div className={`rounded-lg px-2 py-1 text-center ${remaining < 0 ? 'bg-red-50' : 'bg-orange-50'}`}>
-          <p className={`font-medium ${remaining < 0 ? 'text-red-600' : 'text-orange-600'}`}>¥{(remaining / 10000).toFixed(2)}万</p>
-          <p className={remaining < 0 ? 'text-red-500' : 'text-orange-500'} style={{ fontSize: 10 }}>剩余预算</p>
+        <div className="rounded-lg px-2 py-1 text-center bg-orange-50">
+          <p className="font-medium text-orange-600">¥{(expense / 10000).toFixed(2)}万</p>
+          <p className="text-orange-500" style={{ fontSize: 10 }}>已支出</p>
         </div>
       </div>
 

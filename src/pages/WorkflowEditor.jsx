@@ -26,7 +26,7 @@ export const APPROVAL_TYPES = [
   { key: 'invoice', label: '开票申请', icon: FileText, fields: ['含税金额', '发票类型', '收款阶段'] },
   { key: 'contract', label: '合同审批', icon: FileSignature, fields: ['合同金额', '项目类型', '合同类型'] },
   { key: 'seal', label: '用章申请', icon: Stamp, fields: ['用章类型', '用章事由', '用章份数'] },
-  { key: 'project_initiation', label: '项目立项', icon: FolderPlus, fields: ['项目名称', '客户', '成本预算', '项目负责人'] },
+  { key: 'project_initiation', label: '项目立项', icon: FolderPlus, fields: ['项目名称', '客户', '合同金额', '项目负责人'] },
   { key: 'project_complete', label: '项目完成', icon: CheckSquare, fields: ['项目名称', '客户'] },
   { key: 'project_change', label: '项目变更', icon: FilePen, fields: ['变更内容'] },
   { key: 'project_execution_content', label: '项目执行内容', icon: ListChecks, fields: ['Sheet名称', '条目摘要'] },

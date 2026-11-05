@@ -7,12 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import OssUpload from '../components/OssUpload';
 import EmployeePicker from '../components/EmployeePicker';
 import { useAuth } from '@/lib/AuthContext';
+import { SETTLEMENT_METHODS } from '@/lib/acceptancePeriods';
 
 const BID_FORMS = ['公开竞标', '客户指定'];
 const BID_STAGES = ['报名', '开标中', '竞标结束'];
 const OPEN_FORMS = ['线上', '线下'];
 const BID_RESULTS = ['弃标', '流标', '未中标', '中标'];
-const PAYMENT_METHODS = ['月付', '季付', '半年付', '结束后支付'];
 
 const RESULT_COLORS = {
   '弃标': 'bg-blue-100 text-blue-700',
@@ -112,10 +112,10 @@ function Modal({ bid, onClose, onSave }) {
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">结算方式</label>
+              <label className="text-xs text-muted-foreground">结算方式（即验收周期）</label>
               <select value={form.payment_method} onChange={e => f('payment_method', e.target.value)}
                 className="mt-1 w-full px-3 py-2 bg-secondary rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-lime-400 cursor-pointer">
-                {PAYMENT_METHODS.map(o => <option key={o}>{o}</option>)}
+                {SETTLEMENT_METHODS.map(o => <option key={o}>{o}</option>)}
               </select>
             </div>
             <div>

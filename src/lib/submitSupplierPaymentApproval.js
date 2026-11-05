@@ -18,7 +18,7 @@ export {
 } from '@/lib/supplierPaymentHelpers';
 
 /**
- * 创建付款审批并回写供应商；若自动通过则扣减预算。
+ * 创建付款审批并回写供应商付款状态。
  */
 export async function submitSupplierPaymentApproval({
   project,
@@ -62,21 +62,6 @@ export async function submitSupplierPaymentApproval({
     approval_id: approval.id,
     payment_status: paymentStatus,
   });
-
-  if (approval.status === '已通过' && project.id && amount > 0) {
-    const projects = await apiClient.entities.Project.filter({ id: project.id });
-    const proj = projects[0];
-    if (proj) {
-      const newRemaining = (proj.remaining_budget ?? proj.budget_cost ?? 0) - amount;
-      await apiClient.entities.Project.update(proj.id, { remaining_budget: newRemaining });
-      await apiClient.entities.ProjectLog.create({
-        project_id: project.id,
-        action: '预算扣减',
-        detail: `审批「${approval.title}」自动通过，扣减¥${amount.toLocaleString()}，剩余预算¥${newRemaining.toLocaleString()}`,
-        operator: applicant || '',
-      });
-    }
-  }
 
   return { approval, supplier: updatedSupplier };
 }

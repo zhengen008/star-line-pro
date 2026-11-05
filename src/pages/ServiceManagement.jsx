@@ -12,6 +12,7 @@ import {
   isServiceItemBatchDeletable,
 } from '@/lib/serviceManagementAccess';
 import { Plus, Upload, Loader2, Pencil, Trash2, X, Check, Search } from 'lucide-react';
+import { TemplateDownloadLink } from '@/components/project/ServiceItemsImporter';
 import {
   formLabelClass,
   formInputClass,
@@ -88,8 +89,9 @@ function ImportToProjectModal({ eligibleProjects, onClose, onImported }) {
               <p className="mt-2 text-xs text-amber-600">暂无可导入项目（需为你参与且「执行中/完成审批中」的项目）</p>
             )}
           </div>
-          <div className="bg-secondary/40 rounded-xl p-3 text-xs text-muted-foreground leading-relaxed">
-            导入后归属所选项目，并在下方列表回显。项目内可在「服务增项」中勾选提交审批。
+          <div className="bg-secondary/40 rounded-xl p-3 text-xs text-muted-foreground leading-relaxed flex items-start justify-between gap-3">
+            <span>导入后归属所选项目，并在下方列表回显。项目内可在「服务增项」中勾选提交审批。</span>
+            <TemplateDownloadLink className="shrink-0" />
           </div>
           {error && (
             <div className="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-700">{error}</div>
