@@ -3,6 +3,9 @@
  * 纯函数，无外部依赖（供 node --test 直接加载）。
  */
 
+/** 商务 / 立项统一的结算方式选项（决定验收周期） */
+export const SETTLEMENT_METHODS = ['月付', '季付', '半年付', '年付', '结束后支付'];
+
 const CYCLE_MONTHS = { month: 1, quarter: 3, half: 6, year: 12 };
 
 export function resolveAcceptanceCycle(paymentMethod) {

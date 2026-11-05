@@ -103,6 +103,32 @@ export function isProjectInitiationApproval(approval) {
     || (approval.type === 'project_init' && approval.type_label === '项目立项');
 }
 
+/**
+ * 立项表单统一提交：已有待立项项目直接提交；否则先创建待立项项目再提交。
+ * @param {{ project?: object, newProject?: object, formData: object, serviceItems?: object[] }} payload
+ */
+export async function initiateProject({
+  project,
+  newProject,
+  formData,
+  serviceItems = [],
+  operatorName,
+  operatorDept = '',
+  apiClient = defaultApi,
+}) {
+  let target = project;
+  if (!target) {
+    target = await apiClient.entities.Project.create({ ...newProject, members: [], status: '待立项' });
+    await apiClient.entities.ProjectLog.create({
+      project_id: target.id,
+      action: '创建项目',
+      detail: `${newProject.bid_id ? '关联商务项目' : '手动填写（直签）'}创建「${newProject.name}」，合同金额¥${newProject.contract_amount}`,
+      operator: operatorName,
+    });
+  }
+  return submitProjectInitiation({ project: target, formData, serviceItems, operatorName, operatorDept, apiClient });
+}
+
 /** 立项时导入的服务内容 → 「立项服务内容」Sheet（待审核，随立项审批同步状态） */
 async function createInitiationSheet(project, serviceItems, apiClient) {
   const sheet = await apiClient.entities.ExecutionSheet.create({

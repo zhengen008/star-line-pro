@@ -13,6 +13,22 @@ export function calcProgress(startDate, endDate) {
   return { percent, overdue: daysLeft < 0, daysLeft };
 }
 
+export function AcceptanceProgress({ accepted, total }) {
+  if (!total) return null;
+  const percent = Math.round((accepted / total) * 100);
+  return (
+    <div>
+      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+        <span>验收进度</span>
+        <span>已验收 {accepted}/{total} 期 · {percent}%</span>
+      </div>
+      <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+        <div className="h-full rounded-full bg-blue-400 transition-all" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectProgress({ startDate, endDate, status }) {
   if (!startDate || !endDate) return null;
   if (status === '已完成' || status === '已归档') return null;

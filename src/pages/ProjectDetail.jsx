@@ -4,9 +4,10 @@
  *
  * 信息分区：
  *  1. 顶部：项目名/状态/操作按钮（编辑、确认完成、返回）
- *  2. 概览卡片：合同金额 / 已收款 / 已支出 / 剩余预算（明确预算计算逻辑）
- *  3. 三列布局：基本信息 + 关联竞标 / 财务收支明细 / 立项审批流程
- *  4. 底部：审批记录 + 项目日志（双标签页）
+ *  2. 概览卡片：合同金额 / 已验收 / 已开票 / 已回款 / 已支出
+ *  3. 执行内容、验收与回款
+ *  4. 四列布局：基本信息 + 关联竞标 / 开票申请记录 / 支出明细 / 进行中的审批
+ *  5. 底部：审批记录 + 项目日志（双标签页）
  */
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -15,19 +16,21 @@ import { api, fileUrl } from '@/api/client';
 import {
   ArrowLeft, Edit3, CheckCircle2, AlertTriangle, FileText, Briefcase, ExternalLink,
   Calendar, User, Users, Building2, DollarSign, TrendingUp, TrendingDown, Wallet,
-  ClipboardList, History, Hash, Coins, Trash2, FileCheck
+  ClipboardList, History, Hash, Coins, Trash2, FileCheck, ClipboardCheck, Receipt
 } from 'lucide-react';
-import ProjectProgress, { calcProgress } from '../components/project/ProjectProgress';
+import ProjectProgress, { calcProgress, AcceptanceProgress } from '../components/project/ProjectProgress';
 import ApprovalTimeline from '../components/approval/ApprovalTimeline';
 import ApprovalDetailPanel from '../components/approval/ApprovalDetailPanel';
 import EditProjectModal from '../components/project/EditProjectModal';
 import ExecutionItemsSection from '../components/project/ExecutionItemsSection';
-import SubmitInitiationModal from '../components/project/SubmitInitiationModal';
+import ProjectInitiationModal from '../components/project/ProjectInitiationModal';
+import AcceptanceSection from '../components/project/AcceptanceSection';
 import { useAuth } from '@/lib/AuthContext';
 import { applyApprovalDecision } from '@/lib/applyApprovalDecision';
 import { buildApprovalStepsForSubmit } from '@/lib/buildApprovalSteps';
 import { canSubmitProjectInitiation } from '@/lib/bidProjectSync';
-import { submitProjectInitiation } from '@/lib/projectInitiationApproval';
+import { initiateProject } from '@/lib/projectInitiationApproval';
+import { summarizeAcceptances } from '@/lib/acceptancePeriods';
 
 const STATUS_COLORS = {
   '待立项': 'bg-amber-100 text-amber-700',
@@ -38,7 +41,7 @@ const STATUS_COLORS = {
   '已归档': 'bg-gray-100 text-gray-600',
 };
 
-// 财务计算工具：区分已确认 vs 待确认（保证剩余预算口径清晰）
+// 财务计算工具：区分已确认 vs 待确认
 function computeFinance(approvals) {
   const finalIncome = approvals.filter(a => a.direction === '收入' && (a.status === '已通过' || a.status === '已付款'))
     .reduce((s, a) => s + (a.amount || 0), 0);
@@ -87,6 +90,12 @@ export default function ProjectDetail() {
     queryKey: ['bid', project?.bid_id],
     queryFn: () => api.entities.Bid.filter({ id: project.bid_id }),
     enabled: !!project?.bid_id,
+  });
+
+  const { data: acceptances = [] } = useQuery({
+    queryKey: ['project-acceptances', id],
+    queryFn: () => api.entities.ProjectAcceptance.filter({ project_id: id }, 'seq', 500),
+    enabled: !!id,
   });
 
   // 完成项目
@@ -151,19 +160,19 @@ export default function ProjectDetail() {
 
   // 待立项 → 提交立项审批
   const submitInitiationMut = useMutation({
-    mutationFn: async (data) => {
-      return submitProjectInitiation({
-        project,
-        formData: data,
-        operatorName: currentUserName,
-        operatorDept: currentEmployee?.department || '',
-      });
-    },
+    mutationFn: (payload) => initiateProject({
+      ...payload,
+      operatorName: currentUserName,
+      operatorDept: currentEmployee?.department || '',
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project', id] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['all-approvals'] });
       qc.invalidateQueries({ queryKey: ['project-logs', id] });
+      qc.invalidateQueries({ queryKey: ['project-acceptances', id] });
+      qc.invalidateQueries({ queryKey: ['execution-sheets', id] });
+      qc.invalidateQueries({ queryKey: ['execution-items', id] });
       setShowInitiation(false);
     },
   });
@@ -218,6 +227,7 @@ export default function ProjectDetail() {
       qc.invalidateQueries({ queryKey: ['project-logs', id] });
       qc.invalidateQueries({ queryKey: ['execution-sheets', id] });
       qc.invalidateQueries({ queryKey: ['execution-items', id] });
+      qc.invalidateQueries({ queryKey: ['project-acceptances', id] });
       setSelectedApproval(null);
     } catch (e) {
       console.error('applyApprovalDecision failed:', e);
@@ -241,10 +251,9 @@ export default function ProjectDetail() {
   const contractFiles = (() => { try { return bid?.contract_files ? JSON.parse(bid.contract_files) : []; } catch { return []; } })();
   const approvals = allApprovals.filter(a => a.project_id === project.id);
   const finance = computeFinance(approvals);
-
-  const budget = project.budget_cost || 0;
-  const remainingBudget = budget - finance.finalExpense;
-  const projectedRemaining = budget - finance.finalExpense - finance.pendingExpense;
+  const acc = summarizeAcceptances(acceptances);
+  const contractAmount = Number(project.contract_amount) || 0;
+  const wan = (v) => `¥${((v || 0) / 10000).toFixed(2)}万`;
 
   const { overdue, daysLeft } = calcProgress(project.start_date, project.end_date);
   const isActive = !['已完成', '已归档', '完成审批中'].includes(project.status);
@@ -253,6 +262,7 @@ export default function ProjectDetail() {
   const canInitiate = canSubmitProjectInitiation(project, { isAdmin, currentUserName });
   const isPendingInitiation = project.status === '待立项';
   const isPendingApproval = project.status === '待审批';
+  const canManageAcceptance = isAdmin || project.manager === currentUserName;
 
   // 进行中的审批（含立项审批，不含变更/完成）
   const pendingOtherApprovals = approvals
@@ -317,47 +327,43 @@ export default function ProjectDetail() {
             )}
           </div>
         </div>
-        {/* Progress bar */}
-        {project.start_date && project.end_date && (
-          <div className="px-6 pb-4">
-            <ProjectProgress startDate={project.start_date} endDate={project.end_date} status={project.status} />
+        {/* 时间进度 + 验收进度 */}
+        {((project.start_date && project.end_date) || acc.totalPeriods > 0) && (
+          <div className="px-6 pb-4 space-y-3">
+            {project.start_date && project.end_date && (
+              <ProjectProgress startDate={project.start_date} endDate={project.end_date} status={project.status} />
+            )}
+            <AcceptanceProgress accepted={acc.acceptedPeriods} total={acc.totalPeriods} />
           </div>
         )}
       </div>
 
-      {/* 财务概览卡片 - 4 列 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+      {/* 财务概览卡片 - 5 列 */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
         <FinanceCard
           icon={DollarSign} color="blue" label="合同金额"
-          value={project.contract_amount} sub={`成本预算 ¥${(budget / 10000).toFixed(2)}万`}
+          value={contractAmount} sub={project.payment_method ? `结算方式 ${project.payment_method}` : '合同总额'}
         />
         <FinanceCard
-          icon={TrendingUp} color="green" label="已收款"
-          value={finance.finalIncome}
-          sub={finance.pendingIncome > 0 ? `待审收入 ¥${(finance.pendingIncome / 10000).toFixed(2)}万` : '已通过/已付款'}
+          icon={ClipboardCheck} color="indigo" label="已验收"
+          value={acc.acceptedAmount}
+          sub={`${acc.acceptedPeriods}/${acc.totalPeriods} 期 · 占合同 ${contractAmount ? ((acc.acceptedAmount / contractAmount) * 100).toFixed(1) : '0.0'}%`}
         />
         <FinanceCard
-          icon={TrendingDown} color="red" label="已支出"
+          icon={Receipt} color="amber" label="已开票"
+          value={acc.invoicedAmount}
+          sub={acc.uninvoicedAcceptedAmount > 0 ? `已验收未开票 ${wan(acc.uninvoicedAcceptedAmount)}` : '已验收部分均已开票'}
+        />
+        <FinanceCard
+          icon={TrendingUp} color="green" label="已回款"
+          value={acc.receivedAmount}
+          sub={acc.unreceivedAmount > 0 ? `已验收未回款 ${wan(acc.unreceivedAmount)}` : '已验收部分均已回款'}
+        />
+        <FinanceCard
+          icon={Wallet} color="red" label="已支出"
           value={finance.finalExpense}
-          sub={finance.pendingExpense > 0 ? `待审支出 ¥${(finance.pendingExpense / 10000).toFixed(2)}万` : '已通过/已付款'}
+          sub={finance.pendingExpense > 0 ? `另有待审支出 ${wan(finance.pendingExpense)}` : '项目累计花费'}
         />
-        <div className={`rounded-2xl p-5 ${remainingBudget < 0 ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-medium ${remainingBudget < 0 ? 'text-red-700' : 'text-orange-700'}`}>剩余预算</span>
-            <Wallet className={`w-4 h-4 ${remainingBudget < 0 ? 'text-red-500' : 'text-orange-500'}`} />
-          </div>
-          <p className={`text-2xl font-bold ${remainingBudget < 0 ? 'text-red-700' : 'text-orange-700'}`}>
-            ¥{(remainingBudget / 10000).toFixed(2)}万
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-            预算 ¥{(budget / 10000).toFixed(2)}万 − 已支出 ¥{(finance.finalExpense / 10000).toFixed(2)}万
-          </p>
-          {finance.pendingExpense > 0 && (
-            <p className={`text-[10px] mt-0.5 font-medium ${projectedRemaining < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-              扣除待审后预估 ¥{(projectedRemaining / 10000).toFixed(2)}万
-            </p>
-          )}
-        </div>
       </div>
 
       {/* 待立项提示 */}
@@ -380,7 +386,14 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* 主体网格：基本信息 / 收入明细 / 支出明细 / 立项审批 */}
+      {/* 验收与回款 — 立项通过后可登记 */}
+      {!isPendingInitiation && !isPendingApproval && (
+        <div className="mb-4">
+          <AcceptanceSection project={project} acceptances={acceptances} canManage={canManageAcceptance} />
+        </div>
+      )}
+
+      {/* 主体网格：基本信息 / 开票申请记录 / 支出明细 / 进行中的审批 */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
         {/* 基本信息 */}
         <div className="bg-white rounded-2xl border border-border/50 p-5 lg:col-span-1">
@@ -429,9 +442,9 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        {/* 收入明细 */}
+        {/* 开票申请（收入方向审批） */}
         <FinanceList
-          title="收入明细"
+          title="开票申请记录"
           direction="收入"
           icon={TrendingUp}
           tone="green"
@@ -563,11 +576,12 @@ export default function ProjectDetail() {
       )}
 
       {showInitiation && (
-        <SubmitInitiationModal
+        <ProjectInitiationModal
           project={project}
           saving={submitInitiationMut.isPending}
+          error={submitInitiationMut.error ? (submitInitiationMut.error.data?.error || submitInitiationMut.error.message || '提交失败') : ''}
           onClose={() => setShowInitiation(false)}
-          onSave={(data) => submitInitiationMut.mutate(data)}
+          onSubmit={(payload) => submitInitiationMut.mutate(payload)}
         />
       )}
 
@@ -614,6 +628,8 @@ export default function ProjectDetail() {
 function FinanceCard({ icon: Icon, color, label, value, sub }) {
   const colorMap = {
     blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
     green: 'bg-green-50 border-green-200 text-green-700',
     red: 'bg-red-50 border-red-200 text-red-700',
   };
